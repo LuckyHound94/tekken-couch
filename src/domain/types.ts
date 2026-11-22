@@ -1,3 +1,5 @@
+import type { VideoRead } from "./strikes";
+
 export type Phase =
   | "start"
   | "red-zone"
@@ -136,6 +138,7 @@ export interface AppState {
   rules: FloorRule[];
   habits: Habit[];
   matches: Match[];
+  video: VideoRead | null;
 }
 
 export interface JudgeInput {

@@ -60,7 +60,9 @@ export function App() {
         </nav>
       </header>
       <main>
-        {screen === "video" ? <VideoScreen /> : null}
+        {screen === "video" ? (
+          <VideoScreen video={state.video} onVideo={(video) => setState((current) => ({ ...current, video }))} />
+        ) : null}
         {screen === "matches" ? (
           <MatchesScreen
             state={state}

@@ -1,5 +1,6 @@
 import { SEED_RULES } from "./floor";
 import { DEFAULT_TEKKEN_ID, sampleState } from "./sample";
+import { parseVideoRead, type VideoRead } from "./strikes";
 import type { AppState, ButtonFilter, Exchange, FloorRule, Habit, Match, Situation } from "./types";
 
 const STORAGE_KEY = "tekken-couch.v1";
@@ -10,6 +11,7 @@ interface Stored {
   habits?: Habit[];
   matches?: Match[];
   edits?: FloorRule[];
+  video?: VideoRead | null;
 }
 
 const FILTERS: ButtonFilter[] = ["korean", "european", "pakistani", "american"];
@@ -30,6 +32,7 @@ export function exportPayload(state: AppState): Stored {
     habits: state.habits,
     matches: state.matches,
     edits: state.rules.filter((rule) => rule.origin === "edit"),
+    video: state.video,
   };
 }
 
@@ -104,6 +107,7 @@ export function hydrate(stored: Stored): AppState {
     habits: stored.habits ?? [],
     matches: stored.matches ?? base.matches,
     rules: freshRules(stored.edits ?? []),
+    video: parseVideoRead(stored.video),
   };
 }
 
@@ -125,6 +129,7 @@ export function mergeImport(current: AppState, stored: Stored): AppState {
     habits,
     matches: mergeMatches(current.matches, stored.matches ?? []),
     rules: freshRules(edits),
+    video: current.video,
   };
 }
 

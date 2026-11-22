@@ -1,4 +1,4 @@
-import { luminance, pixel, type Rect, type RgbaFrame } from "./frame";
+import { cropFrame, luminance, pixel, type Rect, type RgbaFrame } from "./frame";
 
 interface Bar {
   x0: number;
@@ -179,6 +179,52 @@ export function cornerNameSlots(frame: RgbaFrame): { left: Rect; right: Rect } {
     height: Math.round(h * 0.045),
   };
   return { left, right };
+}
+
+export function findCommandPlate(crop: RgbaFrame): Rect | null {
+  const { width: w, height: h } = crop;
+  if (w < 8 || h < 8) return null;
+  let minX = w;
+  let minY = h;
+  let maxX = -1;
+  let maxY = -1;
+  let count = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const [r, g, b] = pixel(crop, x, y);
+      if (luminance(r, g, b) >= 28) continue;
+      count += 1;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (count < 40 || maxX < minX) return null;
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+  if (width < 12 || height < 8) return null;
+  if (count < width * height * 0.25) return null;
+  return { x: minX, y: minY, width, height };
+}
+
+export function findMoveColumn(frame: RgbaFrame, nameSlot: Rect): Rect | null {
+  const crop = cropFrame(frame, nameSlot);
+  const isolated = isolatePlate(crop);
+  const plate = findCommandPlate(cropFrame(crop, isolated));
+  if (!plate) return null;
+  const absX = nameSlot.x + isolated.x + plate.x;
+  const absY = nameSlot.y + isolated.y + plate.y;
+  const gap = Math.max(4, Math.round(plate.height * 0.2));
+  const y = absY + plate.height + gap;
+  const height = Math.round(plate.height * 2.8);
+  if (y + 8 >= frame.height) return null;
+  const bleed = Math.max(8, Math.round(plate.width * 0.18));
+  const x = Math.max(0, absX - bleed);
+  const width = Math.min(frame.width - x, plate.width + bleed * 2);
+  const h = Math.min(height, frame.height - y);
+  if (width < 8 || h < 8) return null;
+  return { x, y, width, height: h };
 }
 
 export function isolatePlate(crop: RgbaFrame): Rect {

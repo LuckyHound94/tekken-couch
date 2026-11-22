@@ -1,9 +1,12 @@
 import { useRef, useState, type FormEvent } from "react";
 import { characterById } from "../domain/roster";
-import { formatClock, type SettledSides } from "../domain/sides";
+import { formatClock, type SideSegment } from "../domain/sides";
+import type { Strike, VideoRead } from "../domain/strikes";
+import { displayMove } from "../domain/notation";
 import { youtubeVideoId } from "../domain/youtube";
+import { nameStrikes } from "../video/nameStrikes";
 import { loadYoutubePreviews } from "../video/previewFrames";
-import { readMatchFrames, readMatchVideo } from "../video/readMatch";
+import { readMatchFrames, readMatchVideo, type MatchFrames } from "../video/readMatch";
 
 type Status = "idle" | "reading" | "done" | "error";
 
@@ -12,11 +15,39 @@ function sideLabel(id: string | null): string {
   return characterById(id)?.label ?? "не распознан";
 }
 
-export function VideoScreen() {
+function strikeText(items: Strike[]): string {
+  if (items.length === 0) return "удары не распознаны";
+  const parts: string[] = [];
+  let clock = "";
+  for (const item of items) {
+    const next = formatClock(item.time);
+    const name = displayMove(item.move);
+    if (next === clock) parts.push(name);
+    else {
+      parts.push(`${next} ${name}`);
+      clock = next;
+    }
+  }
+  return parts.join(", ");
+}
+
+function strikesFor(segment: SideSegment, side: "left" | "right", strikes: Strike[]): Strike[] {
+  const characterId = side === "left" ? segment.left : segment.right;
+  if (!characterId) return [];
+  return strikes.filter(
+    (item) =>
+      item.side === side &&
+      item.characterId === characterId &&
+      item.time >= segment.start - 0.05 &&
+      item.time <= segment.end + 0.05,
+  );
+}
+
+export function VideoScreen({ video, onVideo }: { video: VideoRead | null; onVideo: (video: VideoRead | null) => void }) {
   const [status, setStatus] = useState<Status>("idle");
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [error, setError] = useState("");
-  const [settled, setSettled] = useState<SettledSides | null>(null);
+  const [catalogNote, setCatalogNote] = useState("");
   const [link, setLink] = useState("");
   const [openingLink, setOpeningLink] = useState(false);
   const run = useRef(0);
@@ -31,10 +62,26 @@ export function VideoScreen() {
     return { token, signal: controller.signal };
   }
 
-  async function start(file: Blob, token: number) {
+  async function publish(read: MatchFrames, token: number, signal: AbortSignal) {
+    let strikes: Strike[] = [];
+    let note = "";
+    try {
+      strikes = await nameStrikes(read.moves, signal);
+    } catch {
+      if (token !== run.current || signal.aborted) return;
+      note = "Удары с каталогом не сверились. Имена сторон на месте.";
+    }
+    if (token !== run.current) return;
+    onVideo({ segments: read.settled.segments, strikes });
+    setCatalogNote(note);
+    setStatus("done");
+  }
+
+  async function start(file: Blob, token: number, signal: AbortSignal) {
     setStatus("reading");
     setError("");
-    setSettled(null);
+    setCatalogNote("");
+    onVideo(null);
     setProgress({ done: 0, total: 0 });
     try {
       const next = await readMatchVideo(file, (done, total) => {
@@ -42,8 +89,7 @@ export function VideoScreen() {
         setProgress({ done, total });
       });
       if (token !== run.current) return;
-      setSettled(next);
-      setStatus("done");
+      await publish(next, token, signal);
     } catch {
       if (token !== run.current) return;
       setStatus("error");
@@ -52,12 +98,12 @@ export function VideoScreen() {
   }
 
   function begin(file: Blob) {
-    const { token } = takeToken();
+    const { token, signal } = takeToken();
     setOpeningLink(false);
-    void start(file, token);
+    void start(file, token, signal);
   }
 
-  async function finishFrames(frames: Awaited<ReturnType<typeof loadYoutubePreviews>>, token: number) {
+  async function finishFrames(frames: Awaited<ReturnType<typeof loadYoutubePreviews>>, token: number, signal: AbortSignal) {
     if (frames.length === 0) return false;
     setOpeningLink(false);
     const next = await readMatchFrames(frames, (done, total) => {
@@ -65,8 +111,7 @@ export function VideoScreen() {
       setProgress({ done, total });
     });
     if (token !== run.current) return true;
-    setSettled(next);
-    setStatus("done");
+    await publish(next, token, signal);
     return true;
   }
 
@@ -76,14 +121,16 @@ export function VideoScreen() {
     if (!id) {
       setStatus("error");
       setError("Нужна ссылка на ролик YouTube.");
-      setSettled(null);
+      setCatalogNote("");
+      onVideo(null);
       return;
     }
     const { token, signal } = takeToken();
     setOpeningLink(true);
     setStatus("reading");
     setError("");
-    setSettled(null);
+    setCatalogNote("");
+    onVideo(null);
     setProgress({ done: 0, total: 0 });
     let refused = "Ссылка не открылась. Ролик может быть закрыт или недоступен.";
     try {
@@ -98,7 +145,7 @@ export function VideoScreen() {
         const blob = await response.blob();
         if (token !== run.current) return;
         setOpeningLink(false);
-        await start(blob, token);
+        await start(blob, token, signal);
         return;
       }
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -109,7 +156,7 @@ export function VideoScreen() {
     try {
       const frames = await loadYoutubePreviews(id, signal);
       if (token !== run.current) return;
-      if (await finishFrames(frames, token)) return;
+      if (await finishFrames(frames, token, signal)) return;
     } catch {
       if (token !== run.current || signal.aborted) return;
     }
@@ -129,14 +176,17 @@ export function VideoScreen() {
     begin(blob);
   }
 
-  const segments = settled?.segments ?? [];
+  const shown = status === "reading" ? null : video;
+  const segments = shown?.segments ?? [];
+  const strikes = shown?.strikes ?? [];
 
   return (
     <section className="screen">
       <p className="lead">
-        Ролик матча можно выбрать файлом или открыть по ссылке на YouTube. Под каждым портретом написано имя: слева и
-        справа. Приложение читает эти две строки. Строка, которую не удалось прочитать, остаётся без имени. Удары, их
-        свойства и вывод «правильно или ошибка» этот шаг не делает.
+        Ролик матча можно выбрать файлом или открыть по ссылке на YouTube. Под портретом написано имя, ниже — строки
+        ударов. Приложение читает имя и эти строки. Удар называется, только если он есть в каталоге того персонажа,
+        которого ролик уже назвал. Непрочитанная строка, чужая строка и движение без удара остаются без имени. Свойства
+        удара и вывод «правильно или ошибка» этот шаг не делает.
       </p>
       <div className="row-actions">
         <label className="file">
@@ -181,19 +231,28 @@ export function VideoScreen() {
         </p>
       ) : null}
       {status === "error" ? <p className="banner">{error}</p> : null}
-      {status === "done" && segments.length === 0 ? (
+      {shown && catalogNote ? <p className="banner">{catalogNote}</p> : null}
+      {shown && segments.length === 0 ? (
         <div className="sides">
-          <Side title="Слева" name="не распознан" known={false} />
-          <Side title="Справа" name="не распознан" known={false} />
+          <Side title="Слева" name="не распознан" moves="" />
+          <Side title="Справа" name="не распознан" moves="" />
         </div>
       ) : null}
-      {status === "done" && segments.length === 1 ? (
+      {shown && segments.length === 1 ? (
         <div className="sides">
-          <Side title="Слева" name={sideLabel(segments[0].left)} known={segments[0].left != null} />
-          <Side title="Справа" name={sideLabel(segments[0].right)} known={segments[0].right != null} />
+          <Side
+            title="Слева"
+            name={sideLabel(segments[0].left)}
+            moves={segments[0].left ? strikeText(strikesFor(segments[0], "left", strikes)) : ""}
+          />
+          <Side
+            title="Справа"
+            name={sideLabel(segments[0].right)}
+            moves={segments[0].right ? strikeText(strikesFor(segments[0], "right", strikes)) : ""}
+          />
         </div>
       ) : null}
-      {status === "done" && segments.length > 1 ? (
+      {shown && segments.length > 1 ? (
         <div className="block">
           <h2>Стороны по ходу ролика</h2>
           <ul className="segments">
@@ -204,7 +263,10 @@ export function VideoScreen() {
                   {segment.end !== segment.start ? `–${formatClock(segment.end)}` : ""}
                 </span>
                 <span>
-                  слева {sideLabel(segment.left)}, справа {sideLabel(segment.right)}
+                  слева {sideLabel(segment.left)}
+                  {segment.left ? `, ${strikeText(strikesFor(segment, "left", strikes))}` : ""}
+                  ; справа {sideLabel(segment.right)}
+                  {segment.right ? `, ${strikeText(strikesFor(segment, "right", strikes))}` : ""}
                 </span>
               </li>
             ))}
@@ -215,11 +277,13 @@ export function VideoScreen() {
   );
 }
 
-function Side({ title, name, known }: { title: string; name: string; known: boolean }) {
+function Side({ title, name, moves }: { title: string; name: string; moves: string }) {
+  const known = name !== "не распознан";
   return (
     <div className={known ? "side named" : "side unknown"}>
       <p className="eyebrow">{title}</p>
       <h2>{name}</h2>
+      {moves ? <p className="moves">{moves}</p> : null}
     </div>
   );
 }

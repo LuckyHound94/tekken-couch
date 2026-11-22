@@ -1,5 +1,5 @@
 import { cropFrame, luminance, type Rect, type RgbaFrame } from "./frame";
-import { isolatePlate } from "./hud";
+import { findCommandPlate, isolatePlate } from "./hud";
 
 function gray(frame: RgbaFrame): RgbaFrame {
   const data = new Uint8ClampedArray(frame.data.length);
@@ -86,6 +86,17 @@ export function scaledPlate(frame: RgbaFrame, slot: Rect): RgbaFrame {
   if (crop.width < 2 || crop.height < 2) return crop;
   const plate = isolatePlate(crop);
   return scaleGray(cropFrame(crop, plate), 5);
+}
+
+export function scaledCommand(frame: RgbaFrame, column: Rect): RgbaFrame | null {
+  const crop = gray(cropFrame(frame, column));
+  if (crop.width < 2 || crop.height < 2) return null;
+  const plate = findCommandPlate(crop);
+  if (!plate) return null;
+  const tight = cropFrame(crop, plate);
+  if (tight.width < 2 || tight.height < 2) return null;
+  const scale = tight.width * 5 > 1600 ? 3 : 5;
+  return scaleGray(tight, scale);
 }
 
 export function inkPlate(scaled: RgbaFrame, threshold: number): RgbaFrame {
