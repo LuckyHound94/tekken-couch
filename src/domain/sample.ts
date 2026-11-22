@@ -54,7 +54,7 @@ const tutorial: Match = {
   patch: null,
   file: "manual",
   fixture: true,
-  blurb: "Учебные обмены, размеченные руками. На них проверяется судья. Это не строка Wavu.",
+  blurb: "Учебные обмены, размеченные руками. На них проверяется couch. Это не строка Wavu.",
   exchanges: [
     exchange({
       id: "t-hellsweep",
@@ -207,7 +207,7 @@ const heihachi: Match = {
   patch: null,
   file: "manual",
   fixture: true,
-  blurb: "Пример строки чужого персонажа. В списке она видна. В судью Heihachi не входит.",
+  blurb: "Пример строки чужого персонажа. В списке она видна. В couch Heihachi не входит.",
   exchanges: [
     exchange({
       id: "h-1",

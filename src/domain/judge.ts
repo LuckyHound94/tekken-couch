@@ -121,7 +121,7 @@ export function judge(input: JudgeInput, rules: FloorRule[] = SEED_RULES, skipCo
   if (!isReina(input.playerCharacter)) {
     return verdict(
       "skipped",
-      "В судью входит Reina. Строка этого персонажа в списке видна и в разбор не идёт.",
+      "В couch входит Reina. Строка этого персонажа в списке видна и в разбор не идёт.",
       null,
       null,
     );

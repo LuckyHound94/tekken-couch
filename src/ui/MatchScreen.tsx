@@ -69,7 +69,7 @@ export function MatchScreen({
             руками.
           </p>
         ) : null}
-        {!judged ? <p className="banner">В судью входит Reina. Эта строка в списке видна и в разбор не идёт.</p> : null}
+        {!judged ? <p className="banner">В couch входит Reina. Эта строка в списке видна и в разбор не идёт.</p> : null}
       </header>
       <div className="row-actions">
         <label className="check">
@@ -477,7 +477,7 @@ function Editor({
                       setPending(null);
                     }}
                   >
-                    Сделать этой правкой судью
+                    Сделать этой правкой couch
                   </button>
                 </>
               ) : null}

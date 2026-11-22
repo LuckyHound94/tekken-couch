@@ -41,7 +41,7 @@ export function App() {
       <header className="top">
         <div>
           <p className="eyebrow">Tekken ID {state.tekkenId}</p>
-          <h1>Судья реплея</h1>
+          <h1>couch</h1>
         </div>
         <nav className="tabs" aria-label="Экраны">
           <button type="button" aria-current={screen === "matches" ? "page" : undefined} onClick={() => setScreen("matches")}>
@@ -51,7 +51,7 @@ export function App() {
             Матч
           </button>
           <button type="button" aria-current={screen === "judge" ? "page" : undefined} onClick={() => setScreen("judge")}>
-            Судья
+            couch
           </button>
         </nav>
       </header>
