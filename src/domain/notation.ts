@@ -102,6 +102,7 @@ const DISPLAY: Record<string, string> = {
   wavedash: "wavedash",
   "1,1,2": "1,1,2",
   "3,2": "3,2",
+  "seen-strike": "удар",
 };
 
 export function cleanNotation(raw: string): string {

@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { characterById } from "../domain/roster";
 import { formatClock, type SideSegment } from "../domain/sides";
 import type { Strike, VideoRead } from "../domain/strikes";
+import { attachAnimatedStrikes, findAnimatedStrikes } from "../domain/motion";
 import { displayMove } from "../domain/notation";
 import { youtubeVideoId } from "../domain/youtube";
 import { nameStrikes } from "../video/nameStrikes";
@@ -66,7 +67,7 @@ export function VideoScreen({ video, onVideo }: { video: VideoRead | null; onVid
     let strikes: Strike[] = [];
     let note = "";
     try {
-      strikes = await nameStrikes(read.moves, signal);
+      strikes = attachAnimatedStrikes(await nameStrikes(read.moves, signal), findAnimatedStrikes(read.motion), read.settled.segments);
     } catch {
       if (token !== run.current || signal.aborted) return;
       note = "Удары с каталогом не сверились. Имена сторон на месте.";
@@ -84,10 +85,14 @@ export function VideoScreen({ video, onVideo }: { video: VideoRead | null; onVid
     onVideo(null);
     setProgress({ done: 0, total: 0 });
     try {
-      const next = await readMatchVideo(file, (done, total) => {
-        if (token !== run.current) return;
-        setProgress({ done, total });
-      });
+      const next = await readMatchVideo(
+        file,
+        (done, total) => {
+          if (token !== run.current) return;
+          setProgress({ done, total });
+        },
+        signal,
+      );
       if (token !== run.current) return;
       await publish(next, token, signal);
     } catch {
@@ -183,10 +188,10 @@ export function VideoScreen({ video, onVideo }: { video: VideoRead | null; onVid
   return (
     <section className="screen">
       <p className="lead">
-        Ролик матча можно выбрать файлом или открыть по ссылке на YouTube. Под портретом написано имя, ниже — строки
-        ударов. Приложение читает имя и эти строки. Удар называется, только если он есть в каталоге того персонажа,
-        которого ролик уже назвал. Непрочитанная строка, чужая строка и движение без удара остаются без имени. Свойства
-        удара и вывод «правильно или ошибка» этот шаг не делает.
+        Ролик матча можно выбрать файлом или открыть по ссылке на YouTube. Приложение читает, кто стоит слева и справа.
+        Удар оно видит по анимации бойца. Если на кадре написана команда и она есть в каталоге этого персонажа, удар
+        называется. Если команды на кадре нет, видимый удар остаётся без имени команды: пропущенную команду приложение
+        не достраивает. Свойства удара и вывод «правильно или ошибка» этот шаг не делает.
       </p>
       <div className="row-actions">
         <label className="file">

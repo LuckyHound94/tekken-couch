@@ -105,7 +105,7 @@ export function parseVideoRead(value: unknown): VideoRead | null {
   if (!value || typeof value !== "object") return null;
   const record = value as { segments?: unknown; strikes?: unknown };
   if (!Array.isArray(record.segments) || !Array.isArray(record.strikes)) return null;
-  if (record.segments.length > 48 || record.strikes.length > 400) return null;
+  if (record.segments.length > 48 || record.strikes.length > 800) return null;
   const segments: SideSegment[] = [];
   for (const item of record.segments) {
     if (!item || typeof item !== "object") return null;
