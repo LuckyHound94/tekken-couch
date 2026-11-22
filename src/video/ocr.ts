@@ -31,8 +31,12 @@ function canvasFrom(frame: RgbaFrame): HTMLCanvasElement {
   return canvas;
 }
 
-export async function readPlate(frame: RgbaFrame): Promise<string> {
+export async function readPlate(frame: RgbaFrame, mode: PSM = PSM.SINGLE_LINE): Promise<string> {
   const instance = await worker();
+  await instance.setParameters({
+    tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    tessedit_pageseg_mode: mode,
+  });
   const result = await instance.recognize(canvasFrom(frame));
   return result.data.text ?? "";
 }

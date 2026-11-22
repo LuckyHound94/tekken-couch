@@ -73,8 +73,17 @@ export function characterFromPlate(text: string): Character | null {
     .map((line) => BY_PLATE.get(line) ?? null)
     .filter((character): character is Character => character != null);
   const ids = new Set(lines.map((character) => character.id));
-  if (ids.size !== 1) return null;
-  return lines[0];
+  if (ids.size === 1) return lines[0];
+  if (ids.size > 1) return null;
+  const tokens = text
+    .toUpperCase()
+    .split(/[^A-Z0-9]+/)
+    .filter((part) => part.length > 0)
+    .map((part) => BY_PLATE.get(part) ?? null)
+    .filter((character): character is Character => character != null);
+  const tokenIds = new Set(tokens.map((character) => character.id));
+  if (tokenIds.size === 1) return tokens[0];
+  return null;
 }
 
 export function characterFromReads(texts: string[]): Character | null {

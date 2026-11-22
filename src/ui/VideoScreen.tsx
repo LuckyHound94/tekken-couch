@@ -2,7 +2,8 @@ import { useRef, useState, type FormEvent } from "react";
 import { characterById } from "../domain/roster";
 import { formatClock, type SettledSides } from "../domain/sides";
 import { youtubeVideoId } from "../domain/youtube";
-import { readMatchVideo } from "../video/readMatch";
+import { loadYoutubePreviews } from "../video/previewFrames";
+import { readMatchFrames, readMatchVideo } from "../video/readMatch";
 
 type Status = "idle" | "reading" | "done" | "error";
 
@@ -56,9 +57,23 @@ export function VideoScreen() {
     void start(file, token);
   }
 
+  async function finishFrames(frames: Awaited<ReturnType<typeof loadYoutubePreviews>>, token: number) {
+    if (frames.length === 0) return false;
+    setOpeningLink(false);
+    const next = await readMatchFrames(frames, (done, total) => {
+      if (token !== run.current) return;
+      setProgress({ done, total });
+    });
+    if (token !== run.current) return true;
+    setSettled(next);
+    setStatus("done");
+    return true;
+  }
+
   async function openLink(event: FormEvent) {
     event.preventDefault();
-    if (!youtubeVideoId(link)) {
+    const id = youtubeVideoId(link);
+    if (!id) {
       setStatus("error");
       setError("Нужна ссылка на ролик YouTube.");
       setSettled(null);
@@ -70,6 +85,7 @@ export function VideoScreen() {
     setError("");
     setSettled(null);
     setProgress({ done: 0, total: 0 });
+    let refused = "Ссылка не открылась. Ролик может быть закрыт или недоступен.";
     try {
       const response = await fetch("/api/youtube", {
         method: "POST",
@@ -78,21 +94,28 @@ export function VideoScreen() {
         signal,
       });
       if (token !== run.current) return;
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
-        setStatus("error");
-        setError(body?.error || "Ссылка не открылась. Ролик может быть закрыт или недоступен.");
+      if (response.ok) {
+        const blob = await response.blob();
+        if (token !== run.current) return;
+        setOpeningLink(false);
+        await start(blob, token);
         return;
       }
-      const blob = await response.blob();
-      if (token !== run.current) return;
-      setOpeningLink(false);
-      await start(blob, token);
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (body?.error) refused = body.error;
     } catch {
       if (token !== run.current || signal.aborted) return;
-      setStatus("error");
-      setError("Ссылка не открылась. Ролик может быть закрыт или недоступен.");
     }
+    try {
+      const frames = await loadYoutubePreviews(id, signal);
+      if (token !== run.current) return;
+      if (await finishFrames(frames, token)) return;
+    } catch {
+      if (token !== run.current || signal.aborted) return;
+    }
+    if (token !== run.current) return;
+    setStatus("error");
+    setError(refused);
   }
 
   async function openFixture() {

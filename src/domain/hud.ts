@@ -162,6 +162,25 @@ export function findNameSlots(frame: RgbaFrame): { left: Rect; right: Rect } | n
   return { left, right };
 }
 
+export function cornerNameSlots(frame: RgbaFrame): { left: Rect; right: Rect } {
+  const { width: w, height: h } = frame;
+  const leftWidth = Math.round(w * 0.083);
+  const left = {
+    x: Math.round(w * 0.019),
+    y: Math.round(h * 0.069),
+    width: leftWidth,
+    height: Math.round(h * 0.05),
+  };
+  const rightWidth = Math.round(w * 0.1);
+  const right = {
+    x: w - Math.round(w * 0.019) - rightWidth,
+    y: Math.round(h * 0.072),
+    width: rightWidth,
+    height: Math.round(h * 0.045),
+  };
+  return { left, right };
+}
+
 export function isolatePlate(crop: RgbaFrame): Rect {
   const { width: w, height: h } = crop;
   if (w === 0 || h === 0) return { x: 0, y: 0, width: w, height: h };
