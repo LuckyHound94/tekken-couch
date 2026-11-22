@@ -76,10 +76,14 @@ export function movesResponse(request: Request, body?: unknown): Response | Prom
 function answer(payload: unknown): Response {
   const reads = readsFrom(payload);
   if (!reads) return jsonError(400, REFUSED);
-  const strikes: Strike[] = settleStrikes(reads, strikeCatalog());
-  return Response.json({ strikes }, { headers: { "cache-control": "no-store" } });
+  try {
+    const strikes: Strike[] = settleStrikes(reads, strikeCatalog());
+    return Response.json({ strikes }, { headers: { "cache-control": "no-store" } });
+  } catch {
+    return jsonError(500, REFUSED);
+  }
 }
 
-export function POST(request: Request): Response | Promise<Response> {
-  return movesResponse(request);
+export function POST(request: Request): Promise<Response> {
+  return Promise.resolve(movesResponse(request));
 }

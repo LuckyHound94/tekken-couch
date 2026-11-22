@@ -1,4 +1,7 @@
-{
+// Команды ударов Tekken 8. Свойства кадра сюда не входят: их подгружает следующий шаг.
+// Срез команд: tekkendocs.com
+
+export const strikeCommands: Record<string, readonly string[]> = {
   "alisa": [
     "1",
     "1+2",
@@ -6323,4 +6326,4 @@
     "ws3",
     "ws4"
   ]
-}
+};
