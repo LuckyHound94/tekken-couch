@@ -2,8 +2,9 @@ import { useRef, useState, type FormEvent } from "react";
 import { characterById } from "../domain/roster";
 import { formatClock, type SideSegment } from "../domain/sides";
 import type { Strike, VideoRead } from "../domain/strikes";
-import { attachAnimatedStrikes, findAnimatedStrikes } from "../domain/motion";
-import { displayMove } from "../domain/notation";
+import { commandLabel } from "../domain/notation";
+import { mergePoseStrikes, poseStrikes } from "../domain/pose";
+import { strikeCatalog } from "../server/strikeCatalog";
 import { youtubeVideoId } from "../domain/youtube";
 import { nameStrikes } from "../video/nameStrikes";
 import { loadYoutubePreviews } from "../video/previewFrames";
@@ -22,7 +23,7 @@ function strikeText(items: Strike[]): string {
   let clock = "";
   for (const item of items) {
     const next = formatClock(item.time);
-    const name = displayMove(item.move);
+    const name = commandLabel(item.move);
     if (next === clock) parts.push(name);
     else {
       parts.push(`${next} ${name}`);
@@ -67,7 +68,8 @@ export function VideoScreen({ video, onVideo }: { video: VideoRead | null; onVid
     let strikes: Strike[] = [];
     let note = "";
     try {
-      strikes = attachAnimatedStrikes(await nameStrikes(read.moves, signal), findAnimatedStrikes(read.motion), read.settled.segments);
+      const named = await nameStrikes(read.moves, signal);
+      strikes = mergePoseStrikes(named, poseStrikes(read.poses, read.settled.segments, strikeCatalog()));
     } catch {
       if (token !== run.current || signal.aborted) return;
       note = "Удары с каталогом не сверились. Имена сторон на месте.";
@@ -189,9 +191,10 @@ export function VideoScreen({ video, onVideo }: { video: VideoRead | null; onVid
     <section className="screen">
       <p className="lead">
         Ролик матча можно выбрать файлом или открыть по ссылке на YouTube. Приложение читает, кто стоит слева и справа.
-        Удар оно видит по анимации бойца. Если на кадре написана команда и она есть в каталоге этого персонажа, удар
-        называется. Если команды на кадре нет, видимый удар остаётся без имени команды: пропущенную команду приложение
-        не достраивает. Свойства удара и вывод «правильно или ошибка» этот шаг не делает.
+        Для Рейны и Алисы удар называется командой из каталога, если поза тела совпала ровно с одной командой: 1, 2,
+        df+1, df+2, uf+4, а у Рейны ещё f,n,d,df+2 и WGS.DF+4. Другой персонаж и неоднозначная поза остаются без имени
+        команды. Если команда написана на кадре, берётся она. Свойства удара и вывод «правильно или ошибка» этот шаг не
+        делает.
       </p>
       <div className="row-actions">
         <label className="file">

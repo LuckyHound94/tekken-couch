@@ -123,8 +123,23 @@ export function normalizeMove(raw: string | null | undefined): string {
   return ALIASES[cleaned] ?? cleaned;
 }
 
+const COMMAND: Record<string, string> = {
+  "1": "1",
+  "2": "2",
+  "df+1": "df+1",
+  "df+2": "df+2",
+  "uf+4": "uf+4",
+  hopkick: "uf+4",
+  "f,n,d,df:2": "f,n,d,df+2",
+  hellsweep: "WGS.DF+4",
+};
+
 export function displayMove(canonical: string): string {
   return DISPLAY[canonical] ?? canonical;
+}
+
+export function commandLabel(canonical: string): string {
+  return COMMAND[canonical] ?? displayMove(canonical);
 }
 
 export function sameName(a: string | null | undefined, b: string | null | undefined): boolean {
