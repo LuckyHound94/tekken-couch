@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { characterById } from "../domain/roster";
 import { formatClock, type SettledSides } from "../domain/sides";
+import { youtubeVideoId } from "../domain/youtube";
 import { readMatchVideo } from "../video/readMatch";
 
 type Status = "idle" | "reading" | "done" | "error";
@@ -15,7 +16,19 @@ export function VideoScreen() {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [error, setError] = useState("");
   const [settled, setSettled] = useState<SettledSides | null>(null);
+  const [link, setLink] = useState("");
+  const [openingLink, setOpeningLink] = useState(false);
   const run = useRef(0);
+  const abort = useRef<AbortController | null>(null);
+
+  function takeToken(): { token: number; signal: AbortSignal } {
+    abort.current?.abort();
+    const controller = new AbortController();
+    abort.current = controller;
+    const token = run.current + 1;
+    run.current = token;
+    return { token, signal: controller.signal };
+  }
 
   async function start(file: Blob, token: number) {
     setStatus("reading");
@@ -38,9 +51,48 @@ export function VideoScreen() {
   }
 
   function begin(file: Blob) {
-    const token = run.current + 1;
-    run.current = token;
+    const { token } = takeToken();
+    setOpeningLink(false);
     void start(file, token);
+  }
+
+  async function openLink(event: FormEvent) {
+    event.preventDefault();
+    if (!youtubeVideoId(link)) {
+      setStatus("error");
+      setError("Нужна ссылка на ролик YouTube.");
+      setSettled(null);
+      return;
+    }
+    const { token, signal } = takeToken();
+    setOpeningLink(true);
+    setStatus("reading");
+    setError("");
+    setSettled(null);
+    setProgress({ done: 0, total: 0 });
+    try {
+      const response = await fetch("/api/youtube", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: link.trim() }),
+        signal,
+      });
+      if (token !== run.current) return;
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        setStatus("error");
+        setError(body?.error || "Ссылка не открылась. Ролик может быть закрыт или недоступен.");
+        return;
+      }
+      const blob = await response.blob();
+      if (token !== run.current) return;
+      setOpeningLink(false);
+      await start(blob, token);
+    } catch {
+      if (token !== run.current || signal.aborted) return;
+      setStatus("error");
+      setError("Ссылка не открылась. Ролик может быть закрыт или недоступен.");
+    }
   }
 
   async function openFixture() {
@@ -59,8 +111,9 @@ export function VideoScreen() {
   return (
     <section className="screen">
       <p className="lead">
-        Ролик матча. Под каждым портретом написано имя: слева и справа. Приложение читает эти две строки. Строка, которую не
-        удалось прочитать, остаётся без имени. Удары, их свойства и вывод «правильно или ошибка» этот шаг не делает.
+        Ролик матча можно выбрать файлом или открыть по ссылке на YouTube. Под каждым портретом написано имя: слева и
+        справа. Приложение читает эти две строки. Строка, которую не удалось прочитать, остаётся без имени. Удары, их
+        свойства и вывод «правильно или ошибка» этот шаг не делает.
       </p>
       <div className="row-actions">
         <label className="file">
@@ -81,8 +134,28 @@ export function VideoScreen() {
           Учебный ролик
         </button>
       </div>
+      <form className="link-form" onSubmit={(event) => void openLink(event)}>
+        <label htmlFor="youtube-url">
+          Ссылка на YouTube
+          <input
+            id="youtube-url"
+            name="youtube-url"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            placeholder="https://www.youtube.com/watch?v=…"
+            value={link}
+            onChange={(event) => setLink(event.target.value)}
+          />
+        </label>
+        <button type="submit" disabled={status === "reading" || !link.trim()}>
+          Открыть ссылку
+        </button>
+      </form>
       {status === "reading" ? (
-        <p className="fine">{progress.total ? `Кадр ${progress.done} из ${progress.total}` : "Открываю ролик"}</p>
+        <p className="fine">
+          {progress.total ? `Кадр ${progress.done} из ${progress.total}` : openingLink ? "Открываю ссылку" : "Открываю ролик"}
+        </p>
       ) : null}
       {status === "error" ? <p className="banner">{error}</p> : null}
       {status === "done" && segments.length === 0 ? (
