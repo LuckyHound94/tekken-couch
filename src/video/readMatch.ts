@@ -1,9 +1,10 @@
-import { findCornerNames, findNameSlots } from "../domain/hud";
-import { inkPlate, scaledCrop, scaledPlate } from "../domain/plateImage";
+import { findCornerNames, findMoveColumn, findNameSlots } from "../domain/hud";
+import { inkPlate, scaledCommand, scaledCrop, scaledPlate } from "../domain/plateImage";
 import { characterFromReads } from "../domain/roster";
 import { sampleTimes, settleSides, type SettledSides, type SideRead } from "../domain/sides";
+import type { MoveRead } from "../domain/strikes";
 import type { Rect, RgbaFrame } from "../domain/frame";
-import { readPlate } from "./ocr";
+import { MOVE_LETTERS, readPlate } from "./ocr";
 import { PSM } from "tesseract.js";
 
 const THRESHOLD = 190;
@@ -78,32 +79,71 @@ async function readSide(frame: RgbaFrame, slot: Rect | null, corner: Rect | null
   return characterFromReads(extra)?.id ?? null;
 }
 
-async function readFrame(frame: RgbaFrame, time: number): Promise<SideRead> {
+async function readColumn(frame: RgbaFrame, slot: Rect | null): Promise<string[]> {
+  if (!slot) return [];
+  const column = findMoveColumn(frame, slot);
+  if (!column) return [];
+  const scaled = scaledCommand(frame, column);
+  if (!scaled) return [];
+  const text = await readPlate(inkPlate(scaled, THRESHOLD), PSM.SINGLE_BLOCK, MOVE_LETTERS);
+  return text
+    .split(/\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && line.length <= 40);
+}
+
+async function readMoveLines(frame: RgbaFrame, primary: Rect | null, fallback: Rect | null): Promise<string[]> {
+  const lines = await readColumn(frame, primary);
+  if (lines.length > 0 || !fallback || primary === fallback) return lines;
+  return readColumn(frame, fallback);
+}
+
+interface FrameRead {
+  side: SideRead;
+  moves: MoveRead;
+}
+
+async function readFrame(frame: RgbaFrame, time: number): Promise<FrameRead> {
   const slots = findNameSlots(frame);
   const corners = findCornerNames(frame);
+  const left = await readSide(frame, slots?.left ?? null, corners.left);
+  const right = await readSide(frame, slots?.right ?? null, corners.right);
   return {
-    time,
-    left: await readSide(frame, slots?.left ?? null, corners.left),
-    right: await readSide(frame, slots?.right ?? null, corners.right),
+    side: { time, left, right },
+    moves: {
+      time,
+      leftCharacter: left,
+      rightCharacter: right,
+      leftLines: await readMoveLines(frame, slots?.left ?? null, corners.left),
+      rightLines: await readMoveLines(frame, slots?.right ?? null, corners.right),
+    },
   };
+}
+
+export interface MatchFrames {
+  settled: SettledSides;
+  moves: MoveRead[];
 }
 
 export async function readMatchFrames(
   frames: RgbaFrame[],
   onProgress: (done: number, total: number) => void,
-): Promise<SettledSides> {
-  const reads: SideRead[] = [];
+): Promise<MatchFrames> {
+  const sides: SideRead[] = [];
+  const moves: MoveRead[] = [];
   for (let i = 0; i < frames.length; i++) {
-    reads.push(await readFrame(frames[i], i));
+    const read = await readFrame(frames[i], i);
+    sides.push(read.side);
+    moves.push(read.moves);
     onProgress(i + 1, frames.length);
   }
-  return settleSides(reads);
+  return { settled: settleSides(sides), moves };
 }
 
 export async function readMatchVideo(
   file: Blob,
   onProgress: (done: number, total: number) => void,
-): Promise<SettledSides> {
+): Promise<MatchFrames> {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.muted = true;
@@ -118,14 +158,17 @@ export async function readMatchVideo(
     if (video.videoWidth < 16) throw new Error("video");
     const duration = await videoDuration(video);
     const times = sampleTimes(duration);
-    const reads: SideRead[] = [];
+    const sides: SideRead[] = [];
+    const moves: MoveRead[] = [];
     for (let i = 0; i < times.length; i++) {
       await seek(video, times[i]);
       const frame = frameFromVideo(video);
-      reads.push(await readFrame(frame, times[i]));
+      const read = await readFrame(frame, times[i]);
+      sides.push(read.side);
+      moves.push(read.moves);
       onProgress(i + 1, times.length);
     }
-    return settleSides(reads);
+    return { settled: settleSides(sides), moves };
   } finally {
     URL.revokeObjectURL(url);
     video.removeAttribute("src");

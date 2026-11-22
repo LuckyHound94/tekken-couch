@@ -229,6 +229,7 @@ export function sampleState(): AppState {
     filter: "korean",
     rules: SEED_RULES.map((rule) => ({ ...rule, when: { ...rule.when } })),
     habits: [],
+    video: null,
     matches: [header, tutorial, heihachi].map((match) => ({
       ...match,
       exchanges: match.exchanges.map((item) => ({ ...item, situation: { ...item.situation } })),

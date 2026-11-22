@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { cropFrame, type RgbaFrame } from "./frame";
-import { findCornerNames, findNameSlots, isolatePlate } from "./hud";
+import { findCommandPlate, findCornerNames, findMoveColumn, findNameSlots, isolatePlate } from "./hud";
 
 function frame(width: number, height: number, color: [number, number, number]): RgbaFrame {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -80,6 +80,23 @@ describe("слоты имён", () => {
     if (!slots) return;
     expect(slots.left.x).toBeGreaterThanOrEqual(80);
     expect(slots.right.x + slots.right.width).toBeLessThanOrEqual(80 + inner.width);
+  });
+});
+
+describe("колонка удара", () => {
+  test("чёрная плашка под именем попадает в колонку, голый фон нет", () => {
+    const image = matchFrame();
+    const slots = findNameSlots(image);
+    expect(slots).not.toBeNull();
+    if (!slots) return;
+    fill(image, slots.left.x + 8, slots.left.y + 8, 80, 24, [8, 8, 8]);
+    const column = findMoveColumn(image, slots.left);
+    expect(column).not.toBeNull();
+    if (!column) return;
+    fill(image, column.x + 4, column.y + 8, Math.min(70, column.width - 8), 28, [6, 6, 6]);
+    const plate = findCommandPlate(cropFrame(image, column));
+    expect(plate).not.toBeNull();
+    expect(findCommandPlate(frame(80, 40, stage))).toBeNull();
   });
 });
 
