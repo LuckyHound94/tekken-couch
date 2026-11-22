@@ -75,6 +75,12 @@ function thresholdPad(frame: RgbaFrame, threshold: number, pad: number): RgbaFra
   return { width, height, data };
 }
 
+export function scaledCrop(frame: RgbaFrame, slot: Rect): RgbaFrame {
+  const crop = gray(cropFrame(frame, slot));
+  if (crop.width < 2 || crop.height < 2) return crop;
+  return scaleGray(crop, 5);
+}
+
 export function scaledPlate(frame: RgbaFrame, slot: Rect): RgbaFrame {
   const crop = gray(cropFrame(frame, slot));
   if (crop.width < 2 || crop.height < 2) return crop;

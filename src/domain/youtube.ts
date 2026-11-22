@@ -33,6 +33,10 @@ export function youtubeVideoId(input: string): string | null {
   return VIDEO_ID.test(id) ? id : null;
 }
 
+export function youtubePreviewUrls(id: string): string[] {
+  return [1, 2, 3].map((part) => `https://i.ytimg.com/vi/${id}/maxres${part}.jpg`);
+}
+
 export function allowedVideoHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, "");
   return host === "googlevideo.com" || host.endsWith(".googlevideo.com");

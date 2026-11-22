@@ -14,6 +14,8 @@ describe("строка имени", () => {
     expect(characterFromPlate("JACK 8")?.id).toBe("jack-8");
     expect(characterFromPlate("kazu ya")?.id).toBe("kazuya");
     expect(characterFromPlate("jinx")).toBeNull();
+    expect(characterFromPlate("M7 REINA")?.id).toBe("reina");
+    expect(characterFromPlate("REINA ALISA")).toBeNull();
     expect(characterFromPlate("")).toBeNull();
     expect(characterFromPlate("jin\npa")?.id).toBe("jin");
     expect(characterFromPlate("jin\nkazuya")).toBeNull();

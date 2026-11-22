@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { allowedVideoHost, youtubeVideoId } from "./youtube";
+import { allowedVideoHost, youtubePreviewUrls, youtubeVideoId } from "./youtube";
 
 const ID = "dQw4w9WgXcQ";
 
@@ -21,6 +21,14 @@ describe("ссылка YouTube", () => {
     expect(youtubeVideoId("https://www.youtube.com/watch?v=short")).toBeNull();
     expect(youtubeVideoId("javascript:alert(1)")).toBeNull();
     expect(youtubeVideoId("")).toBeNull();
+  });
+
+  test("к ролику есть три кадра превью", () => {
+    expect(youtubePreviewUrls("dQw4w9WgXcQ")).toEqual([
+      "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxres1.jpg",
+      "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxres2.jpg",
+      "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxres3.jpg",
+    ]);
   });
 
   test("скачивание разрешено только с хоста ролика", () => {
