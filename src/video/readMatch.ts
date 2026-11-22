@@ -1,4 +1,4 @@
-import { cornerNameSlots, findNameSlots } from "../domain/hud";
+import { findCornerNames, findNameSlots } from "../domain/hud";
 import { inkPlate, scaledCrop, scaledPlate } from "../domain/plateImage";
 import { characterFromReads } from "../domain/roster";
 import { sampleTimes, settleSides, type SettledSides, type SideRead } from "../domain/sides";
@@ -69,17 +69,18 @@ async function readSlot(
   return texts;
 }
 
-async function readSide(frame: RgbaFrame, slot: Rect | null, corner: Rect): Promise<string | null> {
+async function readSide(frame: RgbaFrame, slot: Rect | null, corner: Rect | null): Promise<string | null> {
   const classic = slot ? await readSlot(frame, slot, [THRESHOLD], false, PSM.SINGLE_LINE) : [];
   const classicId = characterFromReads(classic)?.id ?? null;
   if (classicId) return classicId;
+  if (!corner) return null;
   const extra = await readSlot(frame, corner, CORNER_THRESHOLDS, true, PSM.SINGLE_BLOCK);
   return characterFromReads(extra)?.id ?? null;
 }
 
 async function readFrame(frame: RgbaFrame, time: number): Promise<SideRead> {
   const slots = findNameSlots(frame);
-  const corners = cornerNameSlots(frame);
+  const corners = findCornerNames(frame);
   return {
     time,
     left: await readSide(frame, slots?.left ?? null, corners.left),
