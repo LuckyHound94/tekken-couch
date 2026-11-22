@@ -162,23 +162,71 @@ export function findNameSlots(frame: RgbaFrame): { left: Rect; right: Rect } | n
   return { left, right };
 }
 
-export function cornerNameSlots(frame: RgbaFrame): { left: Rect; right: Rect } {
+function nameInk(r: number, g: number, b: number): boolean {
+  return luminance(r, g, b) > 165 && Math.abs(r - g) < 42 && Math.abs(r - b) < 55 && Math.abs(g - b) < 50 && b > 110;
+}
+
+function glyphName(frame: RgbaFrame, side: "left" | "right"): Rect | null {
   const { width: w, height: h } = frame;
-  const leftWidth = Math.round(w * 0.083);
-  const left = {
-    x: Math.round(w * 0.019),
-    y: Math.round(h * 0.069),
-    width: leftWidth,
-    height: Math.round(h * 0.05),
-  };
-  const rightWidth = Math.round(w * 0.1);
-  const right = {
-    x: w - Math.round(w * 0.019) - rightWidth,
-    y: Math.round(h * 0.072),
-    width: rightWidth,
-    height: Math.round(h * 0.045),
-  };
-  return { left, right };
+  const y0 = Math.round(h * 0.068);
+  const y1 = Math.round(h * 0.112);
+  const x0 = side === "left" ? 0 : Math.round(w * 0.76);
+  const x1 = side === "left" ? Math.round(w * 0.24) : w;
+  if (y1 - y0 < 8 || x1 - x0 < 8) return null;
+  const cols: number[] = [];
+  for (let x = x0; x < x1; x++) {
+    let count = 0;
+    for (let y = y0; y < y1; y++) {
+      const [r, g, b] = pixel(frame, x, y);
+      if (nameInk(r, g, b)) count += 1;
+    }
+    if (count >= 2) cols.push(x);
+  }
+  if (cols.length === 0) return null;
+  const gap = Math.max(6, Math.round(w * 0.009));
+  const groups: Array<[number, number]> = [];
+  let start = cols[0];
+  let prev = cols[0];
+  for (const x of [...cols.slice(1), null]) {
+    if (x != null && x - prev <= gap) {
+      prev = x;
+      continue;
+    }
+    groups.push([start, prev]);
+    if (x == null) break;
+    start = x;
+    prev = x;
+  }
+  const minWidth = Math.max(10, Math.round(w * 0.012));
+  const wide = groups.filter(([a, b]) => b - a + 1 >= minWidth);
+  const run = side === "left" ? wide[0] : wide[wide.length - 1];
+  if (!run) return null;
+  const [gx0, gx1] = run;
+  const rows: number[] = [];
+  for (let y = y0; y < y1; y++) {
+    let count = 0;
+    for (let x = gx0; x <= gx1; x++) {
+      const [r, g, b] = pixel(frame, x, y);
+      if (nameInk(r, g, b)) count += 1;
+    }
+    if (count >= 2) rows.push(y);
+  }
+  const band = longestRun(rows);
+  if (!band || band[1] - band[0] < 4) return null;
+  const top = band[0];
+  const bottom = band[1];
+  const padX = 3;
+  const padY = 2;
+  const left = Math.max(0, gx0 - padX);
+  const right = Math.min(w - 1, gx1 + padX);
+  const yy0 = Math.max(0, top - padY);
+  const yy1 = Math.min(h - 1, bottom + padY);
+  return { x: left, y: yy0, width: right - left + 1, height: yy1 - yy0 + 1 };
+}
+
+export function findCornerNames(frame: RgbaFrame): { left: Rect | null; right: Rect | null } {
+  if (frame.width < 64 || frame.height < 64) return { left: null, right: null };
+  return { left: glyphName(frame, "left"), right: glyphName(frame, "right") };
 }
 
 export function findCommandPlate(crop: RgbaFrame): Rect | null {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { cropFrame, type RgbaFrame } from "./frame";
-import { findCommandPlate, findMoveColumn, findNameSlots, isolatePlate } from "./hud";
+import { findCommandPlate, findCornerNames, findMoveColumn, findNameSlots, isolatePlate } from "./hud";
 
 function frame(width: number, height: number, color: [number, number, number]): RgbaFrame {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -97,6 +97,46 @@ describe("колонка удара", () => {
     const plate = findCommandPlate(cropFrame(image, column));
     expect(plate).not.toBeNull();
     expect(findCommandPlate(frame(80, 40, stage))).toBeNull();
+  });
+});
+
+const ink: [number, number, number] = [245, 245, 248];
+
+describe("надпись у портрета", () => {
+  test("короткое имя слева не захватывает чужую белую полоску дальше", () => {
+    const image = frame(1280, 720, stage);
+    fill(image, 24, 58, 36, 18, ink);
+    fill(image, 120, 58, 20, 18, ink);
+    fill(image, 200, 48, 360, 14, orange);
+    const names = findCornerNames(image);
+    expect(names.left).not.toBeNull();
+    if (!names.left) return;
+    expect(names.left.x).toBeLessThanOrEqual(24);
+    expect(names.left.x + names.left.width).toBeGreaterThan(60);
+    expect(names.left.x + names.left.width).toBeLessThan(120);
+  });
+
+  test("два слова с узким пробелом остаются одной надписью", () => {
+    const image = frame(1280, 720, stage);
+    fill(image, 24, 58, 48, 18, ink);
+    fill(image, 80, 58, 36, 18, ink);
+    const names = findCornerNames(image);
+    expect(names.left).not.toBeNull();
+    if (!names.left) return;
+    expect(names.left.x).toBeLessThanOrEqual(24);
+    expect(names.left.x + names.left.width).toBeGreaterThan(116);
+  });
+
+  test("длинное имя справа доходит до края и не лезет к полоске", () => {
+    const image = frame(1280, 720, stage);
+    fill(image, 1080, 58, 170, 18, ink);
+    fill(image, 700, 48, 300, 14, orange);
+    const names = findCornerNames(image);
+    expect(names.right).not.toBeNull();
+    if (!names.right) return;
+    expect(names.right.x).toBeLessThanOrEqual(1080);
+    expect(names.right.x + names.right.width).toBeGreaterThan(1240);
+    expect(names.right.x).toBeGreaterThan(900);
   });
 });
 

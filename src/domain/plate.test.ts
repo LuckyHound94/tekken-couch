@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { characterById, characterFromPlate, characterFromReads } from "./roster";
+import { ROSTER, characterById, characterFromPlate, characterFromReads } from "./roster";
 
 describe("строка имени", () => {
   test("целая строка называется, чужая буква нет", () => {
@@ -26,6 +26,14 @@ describe("строка имени", () => {
     expect(characterFromReads(["JIN", "JUN"])).toBeNull();
     expect(characterFromReads(["", "SS"])).toBeNull();
     expect(characterFromReads(["KAZUYA"])?.label).toBe("Kazuya");
+  });
+
+  test("каждая табличка ростера называется сама собой", () => {
+    expect(ROSTER.length).toBeGreaterThanOrEqual(43);
+    for (const character of ROSTER) {
+      expect(characterFromPlate(character.plate)?.id).toBe(character.id);
+      expect(characterFromPlate(character.label)?.id).toBe(character.id);
+    }
   });
 
   test("id возвращает то же имя", () => {
