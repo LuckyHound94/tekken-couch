@@ -121,6 +121,13 @@ label { display: flex; flex-direction: column; gap: 0.25rem; }
 .text-button { background: transparent; border-color: transparent; color: var(--muted); padding-left: 0; }
 .file input { display: block; margin-top: 0.3rem; }
 
+.sides { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.side { background: var(--bg-2); padding: 0.9rem 1rem; border-left: 3px solid var(--line); }
+.side.named { border-left-color: var(--match); }
+.side.unknown { border-left-color: var(--unresolved); }
+.segments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.segments li { display: grid; grid-template-columns: 7rem 1fr; gap: 0.8rem; background: var(--bg-2); padding: 0.65rem 0.8rem; }
+
 .panel, .editor, .edit-box, .preview {
   border: 1px solid var(--line);
   padding: 0.9rem;
@@ -137,7 +144,7 @@ th { color: var(--muted); font-weight: 500; }
 code { font-family: ui-monospace, "Cascadia Code", monospace; }
 
 @media (max-width: 720px) {
-  .top, .match-row, .exchange, .grid { display: flex; flex-direction: column; }
+  .top, .match-row, .exchange, .grid, .sides, .segments li { display: flex; flex-direction: column; }
   h1 { font-size: 2rem; }
   .app { padding: 1rem 0.9rem 3rem; }
 }

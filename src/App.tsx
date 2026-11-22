@@ -6,13 +6,14 @@ import { sampleState } from "./domain/sample";
 import { JudgeScreen } from "./ui/JudgeScreen";
 import { MatchScreen } from "./ui/MatchScreen";
 import { MatchesScreen } from "./ui/MatchesScreen";
+import { VideoScreen } from "./ui/VideoScreen";
 import { uid } from "./ui/format";
 
-type Screen = "matches" | "match" | "judge";
+type Screen = "video" | "matches" | "match" | "judge";
 
 export function App() {
   const [state, setState] = useState<AppState>(() => loadState());
-  const [screen, setScreen] = useState<Screen>("matches");
+  const [screen, setScreen] = useState<Screen>("video");
   const [matchId, setMatchId] = useState("tutorial");
   const [exchangeId, setExchangeId] = useState<string | null>("t-hellsweep");
 
@@ -44,6 +45,9 @@ export function App() {
           <h1>couch</h1>
         </div>
         <nav className="tabs" aria-label="Экраны">
+          <button type="button" aria-current={screen === "video" ? "page" : undefined} onClick={() => setScreen("video")}>
+            Видео
+          </button>
           <button type="button" aria-current={screen === "matches" ? "page" : undefined} onClick={() => setScreen("matches")}>
             Матчи
           </button>
@@ -56,6 +60,7 @@ export function App() {
         </nav>
       </header>
       <main>
+        {screen === "video" ? <VideoScreen /> : null}
         {screen === "matches" ? (
           <MatchesScreen
             state={state}
