@@ -73,7 +73,8 @@ export async function detectPoses(frame: HTMLCanvasElement, width: number, heigh
     const side: "left" | "right" = hipX < 0.5 ? "left" : "right";
     const pose = normalizeBody(rawBody(person), side === "left" ? 1 : -1);
     if (!pose) continue;
-    samples.push({ time, side, pose });
+    const forward = (side === "left" ? 1 : -1) * hipX;
+    samples.push({ time, side, pose, forward });
   }
   return samples;
 }

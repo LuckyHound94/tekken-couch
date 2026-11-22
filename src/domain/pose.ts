@@ -1,3 +1,4 @@
+import { patternsFor, type MovePattern } from "./poseBook";
 import type { SideSegment } from "./sides";
 import type { Strike, StrikeCatalog } from "./strikes";
 
@@ -33,28 +34,23 @@ export interface PoseSample {
   time: number;
   side: "left" | "right";
   pose: BodyPose;
+  forward?: number;
 }
 
 const READABLE = new Set(["reina", "alisa"]);
 
-const FAMILIES: Record<string, Record<string, string>> = {
-  reina: {
-    electric: "f,n,d,df:2",
-    hellsweep: "hellsweep",
-    hopkick: "hopkick",
-    df2: "df+2",
-    df1: "df+1",
-    straight: "2",
-    jab: "1",
-  },
-  alisa: {
-    hopkick: "hopkick",
-    df2: "df+2",
-    df1: "df+1",
-    straight: "2",
-    jab: "1",
-  },
-};
+interface ObservedHit {
+  time: number;
+  limb: string;
+  low: boolean;
+  high: boolean;
+  back: boolean;
+  forward: boolean;
+  rising: boolean;
+  crouched: boolean;
+  dash: boolean;
+  crouchDash: boolean;
+}
 
 interface Shape {
   leadReach: number;
@@ -116,90 +112,141 @@ function shapeOf(pose: BodyPose): Shape {
   };
 }
 
-function offer(family: string, book: Record<string, string>, allowed: ReadonlySet<string>): string | null {
-  const move = book[family];
-  if (!move || !allowed.has(move)) return null;
-  return move;
-}
-
-function crouchedBefore(
-  samples: Array<{ time: number; pose: BodyPose }>,
-  index: number,
-): boolean {
+function wasCrouched(samples: PoseSample[], index: number): boolean {
   const end = samples[index].time;
   for (let i = index - 1; i >= 0; i--) {
-    if (end - samples[i].time > 0.45) break;
+    if (end - samples[i].time > 0.35) break;
     if (shapeOf(samples[i].pose).kneeY > -0.32) return true;
   }
   return false;
 }
 
-function classify(
-  samples: Array<{ time: number; pose: BodyPose }>,
-  index: number,
-  book: Record<string, string>,
-  allowed: ReadonlySet<string>,
-): string | null {
-  if (index === 0 || samples[index].time - samples[index - 1].time > 0.28) return null;
-  const now = shapeOf(samples[index].pose);
-  const prev = shapeOf(samples[index - 1].pose);
-  const risingLead = now.leadReach > prev.leadReach + 0.12;
-  const risingRear = now.rearReach > prev.rearReach + 0.12;
-  const risingKnee = now.kneeHigh > prev.kneeHigh + 0.12;
-  const risingHand = now.handHigh > prev.handHigh + 0.12;
-  const risingFoot = now.footForward > prev.footForward + 0.12;
-  if (crouchedBefore(samples, index) && risingHand && now.handHigh > 0.45 && now.footForward < 0.85) {
-    return offer("electric", book, allowed);
+function traveled(samples: PoseSample[], index: number): boolean {
+  const now = samples[index].forward;
+  if (now == null) return false;
+  for (let i = index - 1; i >= 0; i--) {
+    if (samples[index].time - samples[i].time > 0.35) break;
+    const previous = samples[i].forward;
+    if (previous != null && now - previous > 0.04) return true;
   }
-  if (crouchedBefore(samples, index) && risingFoot && now.footForward > 0.55 && now.footLow < -0.3 && now.handHigh < 0.2) {
-    return offer("hellsweep", book, allowed);
-  }
-  if (risingKnee && now.kneeHigh > 0.35) return offer("hopkick", book, allowed);
-  if (risingRear && now.lean > 0.22 && now.rearReach > 0.7 && now.kneeHigh < 0.2) return offer("df2", book, allowed);
-  if (risingLead && now.lean > 0.22 && now.leadReach > 0.5 && now.rearReach < 0.4 && now.kneeY < -0.35 && now.kneeHigh < 0.2) {
-    return offer("df1", book, allowed);
-  }
-  if (
-    risingRear &&
-    now.rearReach > 0.75 &&
-    now.leadReach < 0.45 &&
-    now.lean < 0.18 &&
-    now.kneeY < -0.4 &&
-    now.kneeHigh < 0.2 &&
-    now.handHigh < 0.3
-  ) {
-    return offer("straight", book, allowed);
-  }
-  if (
-    risingLead &&
-    now.leadReach > 0.55 &&
-    now.rearReach < 0.35 &&
-    now.lean < 0.18 &&
-    now.kneeY < -0.4 &&
-    now.kneeHigh < 0.2 &&
-    now.handHigh < 0.25
-  ) {
-    return offer("jab", book, allowed);
-  }
-  return null;
+  return false;
 }
 
-export function recognizePoseMoves(
-  samples: Array<{ time: number; pose: BodyPose }>,
-  book: Record<string, string>,
-  allowed: ReadonlySet<string>,
-): Array<{ time: number; move: string }> {
+function observeHit(samples: PoseSample[], index: number): ObservedHit | null {
+  if (index === 0 || samples[index].time - samples[index - 1].time > 0.25) return null;
+  const pose = samples[index].pose;
+  const previous = samples[index - 1].pose;
+  const now = shapeOf(pose);
+  const before = shapeOf(previous);
+  const arm1 = (now.leadReach > before.leadReach + 0.18 && now.leadReach > 0.5) || pose.leftWrist.y > previous.leftWrist.y + 0.35;
+  const arm2 = (now.rearReach > before.rearReach + 0.18 && now.rearReach > 0.45) || pose.rightWrist.y > previous.rightWrist.y + 0.35;
+  const leg3 = (pose.leftAnkle.x > previous.leftAnkle.x + 0.18 && pose.leftAnkle.x > 0.4) || (pose.leftKnee.y > previous.leftKnee.y + 0.2 && pose.leftKnee.y > 0.05);
+  const leg4 = (pose.rightAnkle.x > previous.rightAnkle.x + 0.18 && pose.rightAnkle.x > 0.4) || (pose.rightKnee.y > previous.rightKnee.y + 0.2 && pose.rightKnee.y > 0.05);
+  const ids: number[] = [];
+  if (arm1) ids.push(1);
+  if (arm2) ids.push(2);
+  if (leg3) ids.push(3);
+  if (leg4) ids.push(4);
+  const leanDelta = now.lean - before.lean;
+  let limb = ids.join("+");
+  if (!limb && Math.abs(leanDelta) > 0.2) limb = "body";
+  if (!limb) return null;
+  const high = now.handHigh > 0.3 || now.kneeHigh > 0.2;
+  const crouched = now.kneeY > -0.32;
+  const swept = (leg3 && pose.leftAnkle.y < -0.45 && pose.leftAnkle.x > 0.4) || (leg4 && pose.rightAnkle.y < -0.45 && pose.rightAnkle.x > 0.4);
+  const low = swept || ((arm1 || arm2) && crouched && !high);
+  const priorCrouch = wasCrouched(samples, index);
+  return {
+    time: samples[index].time,
+    limb,
+    low,
+    high,
+    back: leanDelta < -0.12,
+    forward: leanDelta > 0.12 || now.lean > 0.22,
+    rising: priorCrouch && !high && !swept && now.kneeY < -0.4,
+    crouched,
+    dash: traveled(samples, index),
+    crouchDash: priorCrouch && (now.handHigh > 0.3 || swept),
+  };
+}
+
+function hitsOf(samples: PoseSample[]): ObservedHit[] {
   const ordered = [...samples].sort((a, b) => a.time - b.time);
-  const hits: Array<{ time: number; move: string }> = [];
-  let blockedUntil = -1;
-  for (let i = 0; i < ordered.length; i++) {
-    if (ordered[i].time < blockedUntil) continue;
-    const move = classify(ordered, i, book, allowed);
-    if (!move) continue;
-    hits.push({ time: ordered[i].time, move });
-    blockedUntil = ordered[i].time + 0.5;
+  const hits: ObservedHit[] = [];
+  for (let i = 1; i < ordered.length; i++) {
+    const hit = observeHit(ordered, i);
+    if (!hit) continue;
+    const previous = hits[hits.length - 1];
+    if (previous && hit.time - previous.time < 0.18 && previous.limb === hit.limb) continue;
+    hits.push(hit);
   }
   return hits;
+}
+
+function flag(spec: boolean, observed: boolean, weight = 2): number {
+  if (spec && observed) return weight;
+  if (spec && !observed) return -weight * 2;
+  if (!spec && observed) return -weight;
+  return 0;
+}
+
+function scorePattern(pattern: MovePattern, hits: ObservedHit[]): number | null {
+  if (pattern.hits.length !== hits.length) return null;
+  let score = 0;
+  for (let i = 0; i < hits.length; i++) {
+    const spec = pattern.hits[i];
+    const observed = hits[i];
+    if (spec.limb !== observed.limb) return null;
+    score += 10;
+    score += flag(spec.low, observed.low);
+    score += flag(spec.high, observed.high);
+    score += flag(spec.back, observed.back);
+    score += flag(spec.forward, observed.forward);
+  }
+  const first = hits[0];
+  score += flag(pattern.rising, first.rising, 3);
+  score += flag(pattern.crouched, first.crouched, 3);
+  score += flag(pattern.dash, first.dash, 3);
+  score += flag(pattern.crouchDash, first.crouchDash, 3);
+  if (pattern.stance) score -= 3;
+  return score;
+}
+
+export function recognizePoseMoves(samples: PoseSample[], patterns: MovePattern[]): Array<{ time: number; move: string }> {
+  const hits = hitsOf(samples);
+  const named: Array<{ time: number; move: string }> = [];
+  let cursor = 0;
+  while (cursor < hits.length) {
+    let chain = 1;
+    while (cursor + chain < hits.length && hits[cursor + chain].time - hits[cursor + chain - 1].time <= 0.4) chain += 1;
+    let bestScore = -1;
+    let bestLength = 0;
+    let bestIndex = Number.POSITIVE_INFINITY;
+    let bestMove = "";
+    for (let length = chain; length >= 1; length--) {
+      const slice = hits.slice(cursor, cursor + length);
+      patterns.forEach((pattern, index) => {
+        const score = scorePattern(pattern, slice);
+        if (score == null || score < 6) return;
+        const better =
+          score > bestScore ||
+          (score === bestScore && length > bestLength) ||
+          (score === bestScore && length === bestLength && index < bestIndex);
+        if (!better) return;
+        bestScore = score;
+        bestLength = length;
+        bestIndex = index;
+        bestMove = pattern.move;
+      });
+    }
+    if (!bestMove) {
+      cursor += 1;
+      continue;
+    }
+    named.push({ time: hits[cursor].time, move: bestMove });
+    cursor += bestLength;
+  }
+  return named;
 }
 
 function characterOn(segments: SideSegment[], time: number, side: "left" | "right"): string | null {
@@ -217,14 +264,10 @@ export function poseStrikes(samples: PoseSample[], segments: SideSegment[], cata
     let bucket: PoseSample[] = [];
     let character: string | null = null;
     const flush = () => {
-      const book = character ? FAMILIES[character] : undefined;
       const allowed = character ? catalog.get(character) : undefined;
-      if (character && book && allowed) {
-        for (const hit of recognizePoseMoves(
-          bucket.map((sample) => ({ time: sample.time, pose: sample.pose })),
-          book,
-          allowed,
-        )) {
+      const book = character && allowed ? patternsFor(character).filter((pattern) => allowed.has(pattern.move)) : [];
+      if (character && book.length) {
+        for (const hit of recognizePoseMoves(bucket, book)) {
           if (strikes.length >= 160) break;
           strikes.push({ time: hit.time, side, characterId: character, move: hit.move });
         }
