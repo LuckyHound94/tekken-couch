@@ -89,7 +89,8 @@ async function readColumn(frame: RgbaFrame, slot: Rect | null): Promise<string[]
   return text
     .split(/\n/)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0 && line.length <= 40);
+    .filter((line) => line.length > 0 && line.length <= 40)
+    .slice(0, 16);
 }
 
 async function readMoveLines(frame: RgbaFrame, primary: Rect | null, fallback: Rect | null): Promise<string[]> {
