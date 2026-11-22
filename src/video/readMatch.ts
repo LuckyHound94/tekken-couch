@@ -2,6 +2,7 @@ import { findCornerNames, findMoveColumn, findNameSlots } from "../domain/hud";
 import { inkPlate, scaledCommand, scaledCrop, scaledPlate } from "../domain/plateImage";
 import { characterFromReads } from "../domain/roster";
 import { sampleTimes, settleSides, type SettledSides, type SideRead } from "../domain/sides";
+import type { MotionFrame } from "../domain/motion";
 import type { MoveRead } from "../domain/strikes";
 import type { Rect, RgbaFrame } from "../domain/frame";
 import { MOVE_LETTERS, readPlate } from "./ocr";
@@ -9,6 +10,10 @@ import { PSM } from "tesseract.js";
 
 const THRESHOLD = 190;
 const CORNER_THRESHOLDS = [180, 190];
+const MOTION_STEP = 0.1;
+const MOTION_LIMIT = 1500;
+const MOTION_WIDTH = 96;
+const MOTION_HEIGHT = 54;
 
 function frameFromVideo(video: HTMLVideoElement): RgbaFrame {
   const scale = video.videoWidth > 1920 ? 1920 / video.videoWidth : 1;
@@ -124,6 +129,7 @@ async function readFrame(frame: RgbaFrame, time: number): Promise<FrameRead> {
 export interface MatchFrames {
   settled: SettledSides;
   moves: MoveRead[];
+  motion: MotionFrame[];
 }
 
 export async function readMatchFrames(
@@ -138,12 +144,49 @@ export async function readMatchFrames(
     moves.push(read.moves);
     onProgress(i + 1, frames.length);
   }
-  return { settled: settleSides(sides), moves };
+  return { settled: settleSides(sides), moves, motion: [] };
+}
+
+function motionCount(duration: number): number {
+  const span = Math.min(Math.max(0, duration), MOTION_STEP * (MOTION_LIMIT - 1));
+  return Math.max(1, Math.floor(span / MOTION_STEP) + 1);
+}
+
+async function collectMotion(
+  video: HTMLVideoElement,
+  duration: number,
+  total: number,
+  signal: AbortSignal | undefined,
+  onProgress: (done: number, total: number) => void,
+): Promise<MotionFrame[]> {
+  const canvas = document.createElement("canvas");
+  canvas.width = MOTION_WIDTH;
+  canvas.height = MOTION_HEIGHT;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return [];
+  const count = motionCount(duration);
+  const frames: MotionFrame[] = [];
+  for (let i = 0; i < count; i++) {
+    if (signal?.aborted) break;
+    const time = Math.min(i * MOTION_STEP, Math.max(0, duration - 0.04));
+    await seek(video, time);
+    ctx.drawImage(video, 0, 0, MOTION_WIDTH, MOTION_HEIGHT);
+    const image = ctx.getImageData(0, 0, MOTION_WIDTH, MOTION_HEIGHT);
+    const gray = new Uint8Array(MOTION_WIDTH * MOTION_HEIGHT);
+    const data = image.data;
+    for (let p = 0, q = 0; p < data.length; p += 4, q++) {
+      gray[q] = (data[p] * 77 + data[p + 1] * 150 + data[p + 2] * 29) >> 8;
+    }
+    frames.push({ time, width: MOTION_WIDTH, height: MOTION_HEIGHT, gray });
+    onProgress(i + 1, total);
+  }
+  return frames;
 }
 
 export async function readMatchVideo(
   file: Blob,
   onProgress: (done: number, total: number) => void,
+  signal?: AbortSignal,
 ): Promise<MatchFrames> {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
@@ -159,17 +202,20 @@ export async function readMatchVideo(
     if (video.videoWidth < 16) throw new Error("video");
     const duration = await videoDuration(video);
     const times = sampleTimes(duration);
+    const total = motionCount(duration) + times.length;
+    const motion = await collectMotion(video, duration, total, signal, onProgress);
     const sides: SideRead[] = [];
     const moves: MoveRead[] = [];
     for (let i = 0; i < times.length; i++) {
+      if (signal?.aborted) break;
       await seek(video, times[i]);
       const frame = frameFromVideo(video);
       const read = await readFrame(frame, times[i]);
       sides.push(read.side);
       moves.push(read.moves);
-      onProgress(i + 1, times.length);
+      onProgress(motion.length + i + 1, total);
     }
-    return { settled: settleSides(sides), moves };
+    return { settled: settleSides(sides), moves, motion };
   } finally {
     URL.revokeObjectURL(url);
     video.removeAttribute("src");
