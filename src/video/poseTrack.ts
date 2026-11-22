@@ -17,19 +17,27 @@ const JOINTS = {
 } as const;
 
 let loading: Promise<PoseLandmarker | null> | null = null;
-let clock = 0;
+let failures = 0;
 
 function engine(): Promise<PoseLandmarker | null> {
+  if (failures >= 2) return Promise.resolve(null);
   if (!loading) {
     loading = FilesetResolver.forVisionTasks("/pose/wasm")
       .then((wasm) =>
         PoseLandmarker.createFromOptions(wasm, {
           baseOptions: { modelAssetPath: "/pose/pose_landmarker_lite.task", delegate: "CPU" },
-          runningMode: "VIDEO",
-          numPoses: 2,
+          runningMode: "IMAGE",
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.3,
+          minPosePresenceConfidence: 0.3,
+          minTrackingConfidence: 0.3,
         }),
       )
-      .catch(() => null);
+      .catch(() => {
+        failures += 1;
+        loading = null;
+        return null;
+      });
   }
   return loading;
 }
@@ -56,25 +64,23 @@ function rawBody(landmarks: NormalizedLandmark[]): RawBody {
   };
 }
 
-export async function detectPoses(frame: HTMLCanvasElement, width: number, height: number, time: number): Promise<PoseSample[]> {
+export async function detectPoses(
+  frame: HTMLCanvasElement,
+  time: number,
+  side: "left" | "right",
+): Promise<PoseSample | null> {
   const landmarker = await engine();
-  if (!landmarker || width < 2 || height < 2) return [];
-  clock = Math.max(clock + 1, Math.round(time * 1000));
-  let landmarks: NormalizedLandmark[][] = [];
+  if (!landmarker || frame.width < 2 || frame.height < 2) return null;
+  let person: NormalizedLandmark[] | undefined;
   try {
-    landmarks = landmarker.detectForVideo(frame, clock).landmarks ?? [];
+    person = landmarker.detect(frame).landmarks?.[0];
   } catch {
-    return [];
+    return null;
   }
-  const samples: PoseSample[] = [];
-  for (const person of landmarks) {
-    if (person.length < 29) continue;
-    const hipX = (person[JOINTS.leftHip].x + person[JOINTS.rightHip].x) / 2;
-    const side: "left" | "right" = hipX < 0.5 ? "left" : "right";
-    const pose = normalizeBody(rawBody(person), side === "left" ? 1 : -1);
-    if (!pose) continue;
-    const forward = (side === "left" ? 1 : -1) * hipX;
-    samples.push({ time, side, pose, forward });
-  }
-  return samples;
+  if (!person || person.length < 29) return null;
+  const pose = normalizeBody(rawBody(person), side === "left" ? 1 : -1);
+  if (!pose) return null;
+  const hipX = (person[JOINTS.leftHip].x + person[JOINTS.rightHip].x) / 2;
+  const screenX = side === "left" ? hipX * 0.5 : 0.5 + hipX * 0.5;
+  return { time, side, pose, forward: side === "left" ? screenX : 1 - screenX };
 }

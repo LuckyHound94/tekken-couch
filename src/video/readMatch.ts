@@ -171,9 +171,15 @@ async function collectPoses(
     if (signal?.aborted) break;
     const time = Math.min(i * POSE_STEP, Math.max(0, duration - 0.04));
     await seek(video, time);
-    ctx.drawImage(video, 0, 0, POSE_WIDTH, POSE_HEIGHT);
-    const found = await detectPoses(canvas, POSE_WIDTH, POSE_HEIGHT, time);
-    samples.push(...found);
+    const sourceY = video.videoHeight * 0.2;
+    const sourceH = video.videoHeight * 0.8;
+    const half = video.videoWidth / 2;
+    ctx.drawImage(video, 0, sourceY, half, sourceH, 0, 0, POSE_WIDTH, POSE_HEIGHT);
+    const left = await detectPoses(canvas, time, "left");
+    if (left) samples.push(left);
+    ctx.drawImage(video, half, sourceY, half, sourceH, 0, 0, POSE_WIDTH, POSE_HEIGHT);
+    const right = await detectPoses(canvas, time, "right");
+    if (right) samples.push(right);
     onProgress(i + 1, total);
   }
   return samples;
