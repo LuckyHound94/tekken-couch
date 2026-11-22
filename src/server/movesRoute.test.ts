@@ -49,6 +49,29 @@ describe("каталог ударов", () => {
     ]);
   });
 
+  test("лишние и битые строки кадра не срывают сверку", async () => {
+    const noise = ["QQQ", "XXXX", "YYYY", "ZZZZ", "AAAA", "BBBB", "CCCC", "DDDD", "EEEE"];
+    const response = await movesResponse(
+      post({
+        reads: [
+          {
+            time: 0.4,
+            leftCharacter: "reina",
+            rightCharacter: "alisa",
+            leftLines: ["DF + 1", ...noise, "x".repeat(80), 7],
+            rightLines: ["1"],
+          },
+        ],
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { strikes: Array<{ move: string; characterId: string }> };
+    expect(body.strikes).toEqual([
+      { time: 0.4, side: "left", characterId: "reina", move: "df+1" },
+      { time: 0.4, side: "right", characterId: "alisa", move: "1" },
+    ]);
+  });
+
   test("чужое тело не принимается", async () => {
     const response = await movesResponse(post({ reads: [{ time: "сейчас" }] }));
     expect(response.status).toBe(400);

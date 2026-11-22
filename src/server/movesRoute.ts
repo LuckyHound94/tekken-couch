@@ -4,7 +4,7 @@ import { strikeCatalog } from "./strikeCatalog";
 const REFUSED = "Каталог не принял эту запись.";
 const MAX_BODY = 96 * 1024;
 const MAX_READS = 48;
-const MAX_LINES = 8;
+const MAX_LINES = 16;
 const MAX_LINE = 40;
 
 function jsonError(status: number, error: string): Response {
@@ -18,12 +18,13 @@ function character(value: unknown): string | null | undefined {
 }
 
 function lines(value: unknown): string[] | undefined {
-  if (!Array.isArray(value) || value.length > MAX_LINES) return undefined;
+  if (!Array.isArray(value)) return undefined;
   const out: string[] = [];
   for (const item of value) {
-    if (typeof item !== "string") return undefined;
+    if (out.length >= MAX_LINES) break;
+    if (typeof item !== "string") continue;
     const text = item.trim();
-    if (!text || text.length > MAX_LINE) return undefined;
+    if (!text || text.length > MAX_LINE) continue;
     out.push(text);
   }
   return out;

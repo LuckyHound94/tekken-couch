@@ -259,8 +259,12 @@ export function findCommandPlate(crop: RgbaFrame): Rect | null {
 export function findMoveColumn(frame: RgbaFrame, nameSlot: Rect): Rect | null {
   const crop = cropFrame(frame, nameSlot);
   const isolated = isolatePlate(crop);
-  const plate = findCommandPlate(cropFrame(crop, isolated));
+  const plateCrop = cropFrame(crop, isolated);
+  const plate = findCommandPlate(plateCrop);
   if (!plate) return null;
+  const flushAcross = plate.x <= 1 && plate.width >= plateCrop.width - 2;
+  const flushDown = plate.y <= 1 && plate.height >= plateCrop.height * 0.85;
+  if (flushAcross || flushDown) return null;
   const absX = nameSlot.x + isolated.x + plate.x;
   const absY = nameSlot.y + isolated.y + plate.y;
   const gap = Math.max(4, Math.round(plate.height * 0.2));

@@ -98,6 +98,15 @@ describe("колонка удара", () => {
     expect(plate).not.toBeNull();
     expect(findCommandPlate(frame(80, 40, stage))).toBeNull();
   });
+
+  test("тёмный слот целиком не считается плашкой имени", () => {
+    const image = matchFrame();
+    const slots = findNameSlots(image);
+    expect(slots).not.toBeNull();
+    if (!slots) return;
+    fill(image, slots.left.x, slots.left.y, slots.left.width, slots.left.height, [8, 8, 8]);
+    expect(findMoveColumn(image, slots.left)).toBeNull();
+  });
 });
 
 const ink: [number, number, number] = [245, 245, 248];
