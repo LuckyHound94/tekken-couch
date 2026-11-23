@@ -55,12 +55,18 @@ interface ObservedHit {
 interface Shape {
   leadReach: number;
   rearReach: number;
+  leadArm: number;
+  rearArm: number;
   lean: number;
   kneeY: number;
   handHigh: number;
   kneeHigh: number;
   footForward: number;
   footLow: number;
+}
+
+function span(a: Vec, b: Vec): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 function mid(a: Vec, b: Vec): Vec {
@@ -103,6 +109,8 @@ function shapeOf(pose: BodyPose): Shape {
   return {
     leadReach: pose.leftWrist.x - pose.leftShoulder.x,
     rearReach: pose.rightWrist.x - pose.rightShoulder.x,
+    leadArm: span(pose.leftWrist, pose.leftShoulder),
+    rearArm: span(pose.rightWrist, pose.rightShoulder),
     lean: shoulder.x - hip.x,
     kneeY: (pose.leftKnee.y + pose.rightKnee.y) / 2,
     handHigh: Math.max(pose.leftWrist.y, pose.rightWrist.y) - shoulder.y,
@@ -132,6 +140,10 @@ function traveled(samples: PoseSample[], index: number): boolean {
   return false;
 }
 
+function openness(shape: Shape): number {
+  return shape.leadReach + shape.rearReach + shape.leadArm + shape.rearArm;
+}
+
 function quietest(samples: PoseSample[], index: number): { pose: BodyPose; shape: Shape } | null {
   const end = samples[index].time;
   let pose = samples[index].pose;
@@ -140,7 +152,7 @@ function quietest(samples: PoseSample[], index: number): { pose: BodyPose; shape
   for (let i = index - 1; i >= 0; i--) {
     if (end - samples[i].time > 0.45) break;
     const older = shapeOf(samples[i].pose);
-    if (!found || older.leadReach + older.rearReach < shape.leadReach + shape.rearReach) {
+    if (!found || openness(older) < openness(shape)) {
       pose = samples[i].pose;
       shape = older;
     }
@@ -156,10 +168,20 @@ function observeHit(samples: PoseSample[], index: number): ObservedHit | null {
   const previous = baseline.pose;
   const now = shapeOf(pose);
   const before = baseline.shape;
-  const arm1 = (now.leadReach > before.leadReach + 0.12 && now.leadReach > 0.42) || pose.leftWrist.y > previous.leftWrist.y + 0.22;
-  const arm2 = (now.rearReach > before.rearReach + 0.12 && now.rearReach > 0.38) || pose.rightWrist.y > previous.rightWrist.y + 0.22;
-  const leg3 = (pose.leftAnkle.x > previous.leftAnkle.x + 0.12 && pose.leftAnkle.x > 0.32) || (pose.leftKnee.y > previous.leftKnee.y + 0.16 && pose.leftKnee.y > 0);
-  const leg4 = (pose.rightAnkle.x > previous.rightAnkle.x + 0.12 && pose.rightAnkle.x > 0.32) || (pose.rightKnee.y > previous.rightKnee.y + 0.16 && pose.rightKnee.y > 0);
+  const arm1 =
+    (now.leadReach > before.leadReach + 0.12 && now.leadReach > 0.42) ||
+    pose.leftWrist.y > previous.leftWrist.y + 0.22 ||
+    (now.leadArm > before.leadArm + 0.16 && now.leadArm > 0.82);
+  const arm2 =
+    (now.rearReach > before.rearReach + 0.12 && now.rearReach > 0.38) ||
+    pose.rightWrist.y > previous.rightWrist.y + 0.22 ||
+    (now.rearArm > before.rearArm + 0.16 && now.rearArm > 0.82);
+  const leg3 =
+    (pose.leftAnkle.x > previous.leftAnkle.x + 0.12 && pose.leftAnkle.x > 0.24) ||
+    (pose.leftKnee.y > previous.leftKnee.y + 0.16 && pose.leftKnee.y > 0);
+  const leg4 =
+    (pose.rightAnkle.x > previous.rightAnkle.x + 0.12 && pose.rightAnkle.x > 0.24) ||
+    (pose.rightKnee.y > previous.rightKnee.y + 0.16 && pose.rightKnee.y > 0);
   const ids: number[] = [];
   if (arm1) ids.push(1);
   if (arm2) ids.push(2);
@@ -195,7 +217,7 @@ function hitsOf(samples: PoseSample[]): ObservedHit[] {
     const hit = observeHit(ordered, i);
     if (!hit) continue;
     const previous = hits[hits.length - 1];
-    if (previous && hit.time - previous.time < 0.28 && previous.limb === hit.limb) continue;
+    if (previous && hit.time - previous.time < 0.16 && previous.limb === hit.limb) continue;
     hits.push(hit);
   }
   return hits;
