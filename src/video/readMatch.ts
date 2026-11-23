@@ -12,7 +12,12 @@ import { PSM } from "tesseract.js";
 const THRESHOLD = 190;
 const CORNER_THRESHOLDS = [180, 190];
 const POSE_STEP = 0.1;
-const POSE_LIMIT = 900;
+const POSE_SPAN = 20 * 60;
+
+export function poseSampleCount(duration: number): number {
+  const span = Math.min(Math.max(0, duration), POSE_SPAN);
+  return Math.max(1, Math.floor(span / POSE_STEP) + 1);
+}
 const POSE_WIDTH = 640;
 const POSE_HEIGHT = 360;
 
@@ -149,8 +154,7 @@ export async function readMatchFrames(
 }
 
 function poseCount(duration: number): number {
-  const span = Math.min(Math.max(0, duration), POSE_STEP * (POSE_LIMIT - 1));
-  return Math.max(1, Math.floor(span / POSE_STEP) + 1);
+  return poseSampleCount(duration);
 }
 
 async function collectPoses(

@@ -107,6 +107,26 @@ describe("поза называется командой каталога", () =
     expect(poseStrikes([at(0, rest()), at(0.1, crouch), at(0.2, sweep)], segments, live).map((item) => commandLabel(item.move))).toEqual(["WGS.DF+4"]);
   });
 
+  test("короткий джеб и удар ногой читаются у обоих, серия не схлопывается", () => {
+    const jab = rest();
+    jab.leftWrist = { x: 0.4, y: 0.12 };
+    const kick = rest();
+    kick.rightAnkle = { x: 0.3, y: -0.7 };
+    const live = strikeCatalog();
+    const segments = [{ start: 0, end: 2, left: "reina", right: "alisa" }];
+    const again = rest();
+    again.leftWrist = { x: 0.95, y: 0.4 };
+    const straight = rest();
+    straight.leftWrist = { x: 0.95, y: 0.4 };
+    expect(poseStrikes([at(0, rest()), at(0.12, jab)], segments, live).map((item) => item.move)).toEqual(["1"]);
+    expect(
+      poseStrikes([at(0, rest(), "right"), at(0.12, kick, "right")], segments, live).map((item) => item.move),
+    ).toEqual(["4"]);
+    expect(
+      poseStrikes([at(0, rest()), at(0.1, straight), at(0.2, rest()), at(0.32, again)], segments, live).map((item) => item.move),
+    ).toEqual(["1,1"]);
+  });
+
   test("каждая команда Рейны и Алисы разбирается в схему", () => {
     const live = strikeCatalog();
     for (const id of ["reina", "alisa"] as const) {
